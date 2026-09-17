@@ -1,0 +1,83 @@
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    session:
+      timeout: 8h
+      cookie:
+        name: CAMPUSSESSION
+        http-only: true
+        secure: false
+        same-site: lax
+        path: /
+
+spring:
+  application:
+    name: campus-reimburse-api
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/${MYSQL_DB:campus_reimburse}?useUnicode=true&characterEncoding=utf8&connectionTimeZone=UTC&allowPublicKeyRetrieval=true&useSSL=false
+    username: ${MYSQL_USER:campus}
+    password: ${MYSQL_PASSWORD:campus_pass}
+    hikari:
+      initialization-fail-timeout: 60000
+      connection-timeout: 30000
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    connect-retries: 10
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+  jackson:
+    time-zone: Asia/Shanghai
+    serialization:
+      write-dates-as-timestamps: false
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  mapper-locations: classpath*:mapper/*.xml
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+campus:
+  aes-key: ${CAMPUS_AES_KEY:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
+  storage:
+    type: ${CAMPUS_STORAGE_TYPE:minio}
+    local-dir: ${CAMPUS_STORAGE_DIR:./data/files}
+    endpoint: ${MINIO_ENDPOINT:http://127.0.0.1:9000}
+    access-key: ${MINIO_ACCESS_KEY:minioadmin}
+    secret-key: ${MINIO_SECRET_KEY:minioadmin}
+    bucket: campus-files
+    region: us-east-1
+  ocr:
+    enabled: false
+    provider: mock
+    fail-open: true
+    timeout-ms: 8000
+    tencent:
+      secret-id: ${TENCENT_OCR_SECRET_ID:}
+      secret-key: ${TENCENT_OCR_SECRET_KEY:}
+      region: ap-guangzhou
+      endpoint: ocr.tencentcloudapi.com
+      action: VatInvoiceOCR
+      sdk-version: "2018-11-19"
+  invoice-verify:
+    enabled: false
+    provider: mock
+    fail-open: false
+    timeout-ms: 8000
+    tencent:
+      action: VatInvoiceVerifyNew
+      endpoint: ocr.tencentcloudapi.com
