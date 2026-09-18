@@ -62,6 +62,10 @@ if [[ -f "$RUNTIME/api.pid" ]]; then
   rm -f "$RUNTIME/api.pid"
   sleep 1
 fi
+if [[ -f "$RUNTIME/worker.pid" ]]; then
+  kill "$(cat "$RUNTIME/worker.pid")" 2>/dev/null || true
+  rm -f "$RUNTIME/worker.pid"
+fi
 pkill -f "/home/wei/campus-reimburse/runtime/app.jar" 2>/dev/null || true
 sleep 1
 
@@ -96,13 +100,25 @@ for i in $(seq 1 60); do
   fi
 done
 
+nohup env \
+  SERVER_PORT=18082 \
+  SPRING_PROFILES_ACTIVE=worker \
+  OCR_WORKER_ENABLED=true \
+  MYSQL_HOST=127.0.0.1 MYSQL_PORT=13306 MYSQL_DB="${MYSQL_DB}" MYSQL_USER="${MYSQL_USER}" MYSQL_PASSWORD="${MYSQL_PASSWORD}" \
+  SPRING_DATASOURCE_USERNAME="${MYSQL_USER}" SPRING_DATASOURCE_PASSWORD="${MYSQL_PASSWORD}" \
+  REDIS_HOST=127.0.0.1 REDIS_PORT=16379 SPRING_DATA_REDIS_HOST=127.0.0.1 SPRING_DATA_REDIS_PORT=16379 \
+  CAMPUS_STORAGE_TYPE=local CAMPUS_STORAGE_DIR="$RUNTIME/files" CAMPUS_AES_KEY="${CAMPUS_AES_KEY}" \
+  SPRING_DATASOURCE_URL="jdbc:mysql://127.0.0.1:13306/${MYSQL_DB}?useUnicode=true&characterEncoding=utf8&connectionTimeZone=UTC&allowPublicKeyRetrieval=true&useSSL=false" \
+  "$JAVA_HOME/bin/java" -jar "$RUNTIME/app.jar" > "$LOGS/worker.log" 2>&1 &
+echo $! > "$RUNTIME/worker.pid"
+
 if [[ -f "$LOGS/nginx.pid" ]] && kill -0 "$(cat "$LOGS/nginx.pid")" 2>/dev/null; then
   nginx -p "$ROOT" -e "$LOGS/nginx-error.log" -c "$ROOT/nginx.conf" -s reload || true
 else
   nginx -p "$ROOT" -e "$LOGS/nginx-error.log" -c "$ROOT/nginx.conf"
 fi
 
-echo "Started. API health UP on 127.0.0.1:18081, nginx on 0.0.0.0:18080"
+echo "Started. API health UP on 127.0.0.1:18081, OCR worker and nginx on 0.0.0.0:18080"
 echo "If metabb.cn:18080 is not reachable from campus network, open a tunnel on Windows:"
 echo "  ssh -p 10002 -i %USERPROFILE%\\.ssh\\id_wei_metabb_cn -L 18080:127.0.0.1:18080 wei@metabb.cn"
 echo "then browse http://127.0.0.1:18080"

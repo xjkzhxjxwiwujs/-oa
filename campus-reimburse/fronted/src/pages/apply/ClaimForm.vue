@@ -2,7 +2,7 @@
   <div class="card" style="position: relative">
     <h2>{{ id ? '差旅报销' : '新建差旅报销' }}</h2>
     <p class="muted">必须关联已通过的出差申请。行程与人员只读来自申请单，本期只填费用和票据。</p>
-    <a-button id="tour-ocr" class="ocr-corner" @click="ocrSoon">OCR / 验真（二期）</a-button>
+    <a-button v-if="ocrEnabled && !readonly && id" id="tour-ocr" class="ocr-corner" :loading="ocrLoading" @click="runOcr">OCR 快速填写</a-button>
     <a-alert v-if="detail?.lastReturn" :message="'最近退回：' + detail.lastReturn.comment" type="warning" show-icon style="margin-bottom: 12px" />
     <a-form :label-col="{ style: { width: '120px' } }">
       <div id="tour-claim-source">
@@ -47,6 +47,7 @@
           <a-button size="small">上传发票图片/PDF</a-button>
         </a-upload>
         <p v-else-if="!readonly" class="muted">请先保存草稿再上传发票。</p>
+        <p v-if="ocrHint" class="muted">{{ ocrHint }}</p>
         <a-table :data-source="form.invoices" :columns="invoiceCols" :pagination="false" size="small" row-key="_row" style="margin: 8px 0 16px">
           <template #bodyCell="{ column, record }">
             <span v-if="column.key === 'fileId'">{{ record.fileId }}</span>
@@ -117,6 +118,9 @@ const applies = ref<any[]>([])
 const expenses = ref<any[]>([])
 const nodes = ref<any[]>([])
 const applyTimeline = ref<any[]>([])
+const ocrEnabled = ref(false)
+const ocrLoading = ref(false)
+const ocrHint = ref('')
 const canFinance = computed(() => auth.user?.roles?.includes('FINANCE'))
 const readonly = computed(() => {
   const s = detail.value?.form?.status
@@ -147,6 +151,7 @@ function addExpense() {
 }
 
 async function loadMeta() {
+  ocrEnabled.value = !!(await http.get('/api/common/features')).data.data?.ocrEnabled
   const all = (await http.get('/api/applicant/travel-applies')).data.data || []
   applies.value = all.filter((x: any) => x.status === 'APPROVED')
   const dicts = (await http.get('/api/common/dicts')).data.data || []
@@ -235,8 +240,34 @@ async function importPdf(opt: any) {
 async function exportPdf() {
   await download('/api/applicant/pdf/export', (detail.value?.form?.claimNo || 'claim') + '.pdf', { method: 'GET', params: { id: id.value } })
 }
-function ocrSoon() {
-  message.info('OCR 识别与发票验真已预留腾讯云接口，一期关闭，请手工填写票面。')
+async function runOcr() {
+  const invoice = form.invoices.find((x: any) => x.fileId && !x.invoiceNo)
+  if (!invoice) {
+    message.info('请先上传一张尚未填写票号的发票图片')
+    return
+  }
+  ocrLoading.value = true
+  try {
+    await http.post(`/api/applicant/files/${invoice.fileId}/ocr`)
+    ocrHint.value = '已进入 OCR 队列，识别完成后再次点击可读取结果。'
+    window.setTimeout(async () => {
+      const { data } = await http.get(`/api/applicant/files/${invoice.fileId}/ocr`)
+      const result = data.data
+      if (result?.status === 'SUCCESS') {
+        invoice.invoiceCode = result.invoiceCode || invoice.invoiceCode
+        invoice.invoiceNo = result.invoiceNo || invoice.invoiceNo
+        invoice.issueDate = result.issueDate || invoice.issueDate
+        invoice.amount = result.amount || invoice.amount
+        ocrHint.value = '识别结果已回填，请核对后保存。'
+      } else if (result?.message) {
+        ocrHint.value = `OCR 未识别成功：${result.message}，请手工填写。`
+      }
+    }, 1500)
+  } catch (e: any) {
+    message.error(e.response?.data?.message || 'OCR 请求失败')
+  } finally {
+    ocrLoading.value = false
+  }
 }
 </script>
 <style scoped>

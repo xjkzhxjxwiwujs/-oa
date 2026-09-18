@@ -11,11 +11,3 @@ public class DisabledInvoiceVerifyAdapter implements InvoiceVerifyPort {
         return VerifyResult.skipped();
     }
 }
-
-/** 二期：VatInvoiceVerifyNew */
-class TencentVatInvoiceVerifyAdapter implements InvoiceVerifyPort {
-    @Override
-    public VerifyResult verify(String invoiceCode, String invoiceNo, String issueDate, String amount) {
-        throw new UnsupportedOperationException("VatInvoiceVerifyNew reserved for phase 2");
-    }
-}

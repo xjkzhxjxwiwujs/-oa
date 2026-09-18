@@ -22,6 +22,7 @@ if [[ -f "$LOGS/nginx.pid" ]]; then
   nginx -p "$ROOT" -c "$ROOT/nginx.conf" -s stop 2>/dev/null || true
 fi
 stop_pidfile "$RUNTIME/api.pid"
+stop_pidfile "$RUNTIME/worker.pid"
 stop_pidfile "$RUNTIME/minio.pid"
 stop_pidfile "$RUNTIME/redis.pid"
 if [[ -f "$RUNTIME/mysql.pid" ]]; then

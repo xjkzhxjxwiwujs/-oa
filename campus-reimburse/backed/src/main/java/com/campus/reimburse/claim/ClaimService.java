@@ -9,8 +9,11 @@ import com.campus.reimburse.common.SecurityUtils;
 import com.campus.reimburse.domain.*;
 import com.campus.reimburse.file.StoragePort;
 import com.campus.reimburse.mapper.*;
+import com.campus.reimburse.ocr.InvoiceVerifyPort;
+import com.campus.reimburse.ocr.VerifyResult;
 import com.campus.reimburse.workflow.WorkflowService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -47,6 +50,13 @@ public class ClaimService {
     private final WorkflowService workflowService;
     private final CryptoService cryptoService;
     private final StoragePort storagePort;
+    private final InvoiceVerifyPort invoiceVerifyPort;
+    @Value("${campus.invoice-verify.enabled:false}")
+    private boolean invoiceVerifyEnabled;
+
+    public boolean invoiceVerifyEnabled() {
+        return invoiceVerifyEnabled;
+    }
 
     public List<ClaimDtos.PreviewApprover> preview(String claimType, Long deptId, Long applicantId) {
         WfTemplate tpl = workflowService.enabledTemplate(claimType);
@@ -359,7 +369,9 @@ public class ClaimService {
         inv.setConfirmStatus("CONFIRMED");
         inv.setConfirmedBy(me.getId());
         inv.setConfirmedAt(LocalDateTime.now());
-        inv.setVerifyStatus("SKIPPED");
+        if (inv.getVerifyStatus() == null) {
+            inv.setVerifyStatus("SKIPPED");
+        }
         invoiceMapper.updateById(inv);
         InvoiceOccupation occ = new InvoiceOccupation();
         occ.setInvoiceKey(key);
@@ -372,6 +384,37 @@ public class ClaimService {
             throw new BizException("发票已被占用，疑似重复报销");
         }
         audit(me.getId(), "INVOICE_CONFIRM", "INVOICE", inv.getId(), true);
+    }
+
+    /**
+     * 二期：发票验真单独成一步（"确认"只管人工确认 + 占用；"验真"只管真伪），不混在一起。
+     * 一期 invoice-verify.enabled=false 时永远返回 SKIPPED，不会误判真伪；
+     * 腾讯云验真适配器尚未接通（预留位置），即使误将 provider 设为 tencent，也只会在调用时明确报错，不会静默通过。
+     */
+    @Transactional
+    public void verifyInvoice(Long invoiceId) {
+        LoginUser me = SecurityUtils.requireUser();
+        if (!me.getRoles().contains("FINANCE") && !me.getRoles().contains("ADMIN")) {
+            throw new BizException(403, "仅财务可发起验真");
+        }
+        ClaimInvoice inv = invoiceMapper.selectById(invoiceId);
+        if (inv == null) {
+            throw new BizException("发票不存在");
+        }
+        if (!invoiceVerifyEnabled) {
+            inv.setVerifyStatus("SKIPPED");
+            inv.setVerifiedAt(LocalDateTime.now());
+            invoiceMapper.updateById(inv);
+            audit(me.getId(), "INVOICE_VERIFY", "INVOICE", inv.getId(), true);
+            return;
+        }
+        VerifyResult result = invoiceVerifyPort.verify(inv.getInvoiceCode(), inv.getInvoiceNo(),
+                inv.getIssueDate() == null ? null : inv.getIssueDate().toString(),
+                inv.getAmount() == null ? null : inv.getAmount().toPlainString());
+        inv.setVerifyStatus(result.status());
+        inv.setVerifiedAt(LocalDateTime.now());
+        invoiceMapper.updateById(inv);
+        audit(me.getId(), "INVOICE_VERIFY", "INVOICE", inv.getId(), true);
     }
 
     public Map<String, Object> todoDetail(Long todoId) {

@@ -17,6 +17,7 @@
           <template v-if="showApprove">
             <a-menu-item id="nav-approve-home" key="/approve/home" @click="go('/approve/home')">审批工作台</a-menu-item>
             <a-menu-item v-if="canFinance" id="nav-finance" key="/approve/finance" @click="go('/approve/finance')">财务查询/导出</a-menu-item>
+            <a-menu-item v-if="user?.roles?.includes('ADMIN')" key="/approve/admin/ocr-debug" @click="go('/approve/admin/ocr-debug')">OCR 调试台</a-menu-item>
           </template>
           <a-menu-item id="nav-guide" key="guide" @click="replayGuide">新手引导</a-menu-item>
           <a-menu-item key="logout" @click="onLogout">退出</a-menu-item>
@@ -64,6 +65,7 @@ const selectedKeys = computed(() => {
   if (p.startsWith('/apply/travel-apply')) return ['/apply/travel-apply']
   if (p.startsWith('/apply/travel-claim')) return ['/apply/travel-claim']
   if (p.startsWith('/approve/finance')) return ['/approve/finance']
+  if (p.startsWith('/approve/admin/ocr-debug')) return ['/approve/admin/ocr-debug']
   if (p.startsWith('/approve/todo')) return ['/approve/home']
   return [p]
 })

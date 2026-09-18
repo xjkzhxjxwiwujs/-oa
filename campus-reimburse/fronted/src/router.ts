@@ -9,6 +9,7 @@ import ApproveHome from './pages/approve/Home.vue'
 import TodoDetail from './pages/approve/TodoDetail.vue'
 import Finance from './pages/approve/Finance.vue'
 import FinanceDetail from './pages/approve/FinanceDetail.vue'
+import OcrDebug from './pages/approve/OcrDebug.vue'
 import Help from './pages/Help.vue'
 
 const router = createRouter({
@@ -24,6 +25,7 @@ const router = createRouter({
     { path: '/approve/todo/:id', component: TodoDetail },
     { path: '/approve/finance', component: Finance },
     { path: '/approve/finance/:id', component: FinanceDetail },
+    { path: '/approve/admin/ocr-debug', component: OcrDebug },
     { path: '/help', component: Help }
   ]
 })

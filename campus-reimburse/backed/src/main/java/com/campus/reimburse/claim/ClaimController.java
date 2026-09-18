@@ -4,6 +4,7 @@ import com.campus.reimburse.common.ApiResult;
 import com.campus.reimburse.common.LoginUser;
 import com.campus.reimburse.common.SecurityUtils;
 import com.campus.reimburse.domain.SysNotify;
+import com.campus.reimburse.ocr.OcrService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -19,6 +20,7 @@ public class ClaimController {
     private final ExportService exportService;
     private final PdfService pdfService;
     private final GuideService guideService;
+    private final OcrService ocrService;
 
     @GetMapping("/applicant/approver-preview")
     public ApiResult<List<ClaimDtos.PreviewApprover>> preview(@RequestParam String claimType) {
@@ -85,9 +87,29 @@ public class ClaimController {
         return ApiResult.ok(claimService.upload(claimId, file, materialCode));
     }
 
+    @GetMapping("/common/features")
+    public ApiResult<Map<String, Boolean>> features() {
+        return ApiResult.ok(Map.of("ocrEnabled", ocrService.enabled(), "invoiceVerifyEnabled", claimService.invoiceVerifyEnabled()));
+    }
+
+    @GetMapping("/admin/ocr-debug")
+    public ApiResult<List<com.campus.reimburse.domain.InvoiceOcrResult>> ocrDebug() {
+        return ApiResult.ok(ocrService.debugResults());
+    }
+
     @PostMapping("/applicant/pdf/import")
     public ApiResult<Map<String, Object>> importPdf(@RequestParam Long claimId, @RequestParam("file") MultipartFile file) throws Exception {
         return ApiResult.ok(claimService.upload(claimId, file, "CLAIM_PDF"));
+    }
+
+    @PostMapping("/applicant/files/{fileId}/ocr")
+    public ApiResult<Map<String, Object>> ocr(@PathVariable Long fileId) {
+        return ApiResult.ok(ocrService.queue(fileId));
+    }
+
+    @GetMapping("/applicant/files/{fileId}/ocr")
+    public ApiResult<Object> ocrResult(@PathVariable Long fileId) {
+        return ApiResult.ok(ocrService.result(fileId));
     }
 
     @GetMapping("/applicant/pdf/export")
@@ -136,6 +158,12 @@ public class ClaimController {
     @PostMapping("/finance/claims/{claimId}/invoices/{invoiceId}/confirm")
     public ApiResult<Void> confirm(@PathVariable Long invoiceId) {
         claimService.confirmInvoice(invoiceId);
+        return ApiResult.ok();
+    }
+
+    @PostMapping("/finance/claims/{claimId}/invoices/{invoiceId}/verify")
+    public ApiResult<Void> verify(@PathVariable Long invoiceId) {
+        claimService.verifyInvoice(invoiceId);
         return ApiResult.ok();
     }
 

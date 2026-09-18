@@ -62,10 +62,11 @@ campus:
     bucket: campus-files
     region: us-east-1
   ocr:
-    enabled: false
-    provider: mock
+    enabled: ${OCR_ENABLED:true}
+    provider: ${OCR_PROVIDER:mock}
     fail-open: true
     timeout-ms: 8000
+    worker-enabled: ${OCR_WORKER_ENABLED:false}
     tencent:
       secret-id: ${TENCENT_OCR_SECRET_ID:}
       secret-key: ${TENCENT_OCR_SECRET_KEY:}
