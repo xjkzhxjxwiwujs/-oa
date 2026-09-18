@@ -1,0 +1,12 @@
+[mysqld]
+port=13306
+bind-address=127.0.0.1
+mysqlx=0
+skip-log-bin
+character-set-server=utf8mb4
+collation-server=utf8mb4_0900_ai_ci
+default-authentication-plugin=caching_sha2_password
+max_connections=50
+innodb_buffer_pool_size=128M
+table_open_cache=200
+performance_schema=OFF
