@@ -1,10 +1,10 @@
 <template>
+  <PageHead kicker="管理员" title="OCR 调试台" desc="仅管理员可见；不展示原始票据内容或腾讯云密钥。" />
   <div class="card">
-    <a-page-header title="OCR 调试台" sub-title="仅管理员可见；不展示原始票据内容或腾讯云密钥。" />
     <a-alert message="当前结果来自 OCR 任务。识别成功只用于辅助回填，财务仍须人工确认票据信息。" type="info" show-icon style="margin-bottom: 16px" />
     <a-table :columns="columns" :data-source="rows" :pagination="{ pageSize: 20 }" row-key="id">
       <template #bodyCell="{ column, record }">
-        <a-tag v-if="column.key === 'status'" :color="record.status === 'SUCCESS' ? 'green' : record.status === 'PENDING' ? 'blue' : 'red'">{{ record.status }}</a-tag>
+        <a-tag v-if="column.key === 'status'" :color="record.status === 'SUCCESS' ? 'green' : record.status === 'PENDING' ? 'blue' : 'red'">{{ OCR_LABEL[record.status] || record.status }}</a-tag>
         <span v-else-if="column.key === 'invoice'">{{ record.invoiceCode || '-' }} / {{ record.invoiceNo || '-' }}</span>
       </template>
     </a-table>
@@ -14,6 +14,8 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import http from '../../api'
+import PageHead from '../../components/PageHead.vue'
+import { OCR_LABEL } from '../../labels'
 
 const rows = ref<any[]>([])
 const columns = [

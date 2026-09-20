@@ -1,27 +1,36 @@
 <template>
-  <div class="card" v-if="!detail" id="tour-finance-detail">
+  <div v-if="!detail" class="card" id="tour-finance-detail">
     <p class="muted">正在打开报销单…</p>
   </div>
-  <div class="card" v-else id="tour-finance-detail">
-    <h2>报销单 {{ detail.form?.claimNo }}</h2>
-    <p>申请人 {{ detail.applicantName }} · {{ detail.form?.status }} · 金额 {{ detail.form?.amount }}</p>
-    <a-table :data-source="detail.expenses" :columns="expenseCols" :pagination="false" size="small" :row-key="(r: any) => String(r.id || r.expenseTypeCode + '-' + r.occurredOn + '-' + r.amount)" />
-    <div id="tour-finance-invoices">
-      <h3>发票</h3>
-      <a-table :data-source="detail.invoices" :columns="invoiceCols" :pagination="false" size="small" :row-key="(r: any) => r.id">
+  <template v-else>
+    <PageHead kicker="财务核票" :title="'报销单 ' + detail.form?.claimNo" :desc="'申请人 ' + (detail.applicantName || '') + ' · 金额 ' + money(detail.form?.amount)">
+      <StatusTag :code="detail.form?.status" />
+    </PageHead>
+    <div class="card" id="tour-finance-detail">
+      <div class="section-title"><h3>费用明细</h3></div>
+      <a-table :data-source="detail.expenses" :columns="expenseCols" :pagination="false" size="middle" :row-key="(r: any) => String(r.id || r.expenseTypeCode + '-' + r.occurredOn + '-' + r.amount)" />
+    </div>
+    <div class="card" id="tour-finance-invoices">
+      <div class="section-title"><h3>发票</h3></div>
+      <a-table :data-source="detail.invoices" :columns="invoiceCols" :pagination="false" size="middle" :row-key="(r: any) => r.id">
         <template #bodyCell="{ column, record }">
-          <a-button
-            v-if="column.key === 'act' && record.confirmStatus !== 'CONFIRMED' && detail.form?.currentNode === 'FINANCE'"
-            size="small"
-            type="primary"
-            @click="confirm(record.id)"
-          >
-            确认占用
-          </a-button>
+          <a-tag v-if="column.key === 'confirmStatus'" :color="record.confirmStatus === 'CONFIRMED' ? 'success' : 'default'">{{ record.confirmStatus === 'CONFIRMED' ? '已确认' : '待确认' }}</a-tag>
+          <a-tag v-else-if="column.key === 'verifyStatus'" :color="record.verifyStatus === 'SKIPPED' ? 'default' : 'processing'">{{ record.verifyStatus === 'SKIPPED' ? '已跳过' : (record.verifyStatus || '未验真') }}</a-tag>
+          <a-space v-else-if="column.key === 'act'">
+            <a-button
+              v-if="record.confirmStatus !== 'CONFIRMED' && detail.form?.currentNode === 'FINANCE'"
+              size="small"
+              type="primary"
+              @click="confirm(record.id)"
+            >
+              确认占用
+            </a-button>
+            <a-button size="small" @click="verify(record.id)">验真</a-button>
+          </a-space>
         </template>
       </a-table>
     </div>
-    <div id="tour-finance-pdf" style="margin: 12px 0">
+    <div class="card" id="tour-finance-pdf">
       <a-space>
         <a-upload :show-upload-list="false" accept=".pdf" :custom-request="importPdf">
           <a-button>导入报销单 PDF</a-button>
@@ -29,11 +38,11 @@
         <a-button @click="pdf">导出 PDF</a-button>
       </a-space>
     </div>
-    <div id="tour-finance-timeline">
-      <h3>进度</h3>
+    <div class="card" id="tour-finance-timeline">
+      <div class="section-title"><h3>进度</h3></div>
       <Timeline :nodes="detail.timeline || []" />
     </div>
-  </div>
+  </template>
 </template>
 
 <script setup lang="ts">
@@ -42,6 +51,9 @@ import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import http, { download, uploadFile } from '../../api'
 import Timeline from '../../components/Timeline.vue'
+import PageHead from '../../components/PageHead.vue'
+import StatusTag from '../../components/StatusTag.vue'
+import { money } from '../../labels'
 
 const expenseCols = [
   { title: '类型', dataIndex: 'expenseTypeCode' },
@@ -50,8 +62,9 @@ const expenseCols = [
 ]
 const invoiceCols = [
   { title: '票号', dataIndex: 'invoiceNo' },
-  { title: '确认', dataIndex: 'confirmStatus' },
-  { title: '操作', key: 'act', width: 140 }
+  { title: '确认', key: 'confirmStatus', width: 100 },
+  { title: '验真', key: 'verifyStatus', width: 100 },
+  { title: '操作', key: 'act', width: 180 }
 ]
 
 const route = useRoute()
@@ -63,6 +76,11 @@ onMounted(load)
 async function confirm(invoiceId: number) {
   await http.post(`/api/finance/claims/${route.params.id}/invoices/${invoiceId}/confirm`)
   message.success('已确认')
+  await load()
+}
+async function verify(invoiceId: number) {
+  await http.post(`/api/finance/claims/${route.params.id}/invoices/${invoiceId}/verify`)
+  message.success('已发起验真')
   await load()
 }
 async function importPdf(opt: any) {

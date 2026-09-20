@@ -6,10 +6,10 @@
       class="node"
       :class="{ current: n.state === 'current', done: n.state === 'done', timeout: n.timeout, rejected: n.state === 'rejected' }"
     >
-      <div>{{ n.nodeName }}</div>
+      <div style="font-weight: 650">{{ n.nodeName }}</div>
       <div class="muted">{{ n.assigneeName || statusText(n.state) }}</div>
       <div class="muted" v-if="n.stayHours != null">已停留 {{ n.stayHours }} 小时</div>
-      <div class="muted" v-if="n.timeout">已超时</div>
+      <div class="muted" v-if="n.timeout" style="color: var(--warn)">已超时</div>
       <div class="muted" v-if="n.comment">{{ n.comment }}</div>
     </div>
   </div>

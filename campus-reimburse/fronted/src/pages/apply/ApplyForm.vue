@@ -1,8 +1,14 @@
 <template>
+  <PageHead
+    kicker="出差申请"
+    :title="id ? '出差申请' : '新建出差申请'"
+    desc="不填金额。审批路径：部门领导 → 学院。通过后才能报销。"
+  >
+    <StatusTag v-if="detail?.form?.status" :code="detail.form.status" />
+    <span v-if="detail?.form?.claimNo" class="muted">{{ detail.form.claimNo }}</span>
+  </PageHead>
+  <a-alert v-if="detail?.lastReturn" :message="'最近退回：' + detail.lastReturn.comment" type="warning" show-icon style="margin-bottom: 16px" />
   <div class="card">
-    <h2>{{ id ? '出差申请' : '新建出差申请' }}</h2>
-    <p class="muted">不填金额。审批路径：部门领导 → 学院。通过后才能报销。</p>
-    <a-alert v-if="detail?.lastReturn" :message="'最近退回：' + detail.lastReturn.comment" type="warning" show-icon style="margin-bottom: 12px" />
     <a-form :label-col="{ style: { width: '110px' } }">
       <div id="tour-apply-project">
         <a-form-item label="经费项目">
@@ -19,63 +25,65 @@
         <a-form-item label="出差原因">
           <a-input v-model:value="form.reason" :maxlength="200" show-count :disabled="readonly" />
         </a-form-item>
-        <a-form-item label="开始日期"><DateField v-model="form.startDate" :disabled="readonly" /></a-form-item>
-        <a-form-item label="结束日期"><DateField v-model="form.endDate" :disabled="readonly" /></a-form-item>
+        <a-row :gutter="16">
+          <a-col :span="12"><a-form-item label="开始日期"><DateField v-model="form.startDate" :disabled="readonly" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="结束日期"><DateField v-model="form.endDate" :disabled="readonly" /></a-form-item></a-col>
+        </a-row>
         <a-form-item label="备注"><a-textarea v-model:value="form.remark" :disabled="readonly" :rows="3" /></a-form-item>
-      </div>
-      <div id="tour-apply-persons">
-        <h3>出差人</h3>
-        <a-button v-if="!readonly" size="small" class="table-toolbar" @click="addPerson">添加</a-button>
-        <a-table :data-source="form.persons" :columns="personCols" :pagination="false" size="small" row-key="_row" style="margin: 8px 0 16px">
-          <template #bodyCell="{ column, record, index }">
-            <a-select v-if="column.key === 'personType'" v-model:value="record.personType" :disabled="readonly" :options="personTypeOpts" style="width: 100%" />
-            <a-input v-else-if="column.key === 'guestName'" v-model:value="record.guestName" :disabled="readonly || record.isApplicant === 1" />
-            <a-switch
-              v-else-if="column.key === 'isApplicant'"
-              :checked="record.isApplicant === 1"
-              :disabled="readonly"
-              @update:checked="(v: boolean) => (record.isApplicant = v ? 1 : 0)"
-            />
-            <a-button v-else-if="column.key === 'act'" type="link" danger @click="form.persons.splice(index, 1)">删</a-button>
-          </template>
-        </a-table>
-      </div>
-      <div id="tour-apply-legs">
-        <h3>行程</h3>
-        <a-button v-if="!readonly" size="small" class="table-toolbar" @click="addLeg">添加</a-button>
-        <a-table :data-source="form.legs" :columns="legCols" :pagination="false" size="small" row-key="_row" style="margin: 8px 0 16px">
-          <template #bodyCell="{ column, record, index }">
-            <a-input v-if="column.key === 'fromPlace'" v-model:value="record.fromPlace" :disabled="readonly" />
-            <a-input v-else-if="column.key === 'toPlace'" v-model:value="record.toPlace" :disabled="readonly" />
-            <a-select v-else-if="column.key === 'transportCode'" v-model:value="record.transportCode" :disabled="readonly" :options="transportOpts" style="width: 100%" />
-            <DateField v-else-if="column.key === 'departDate'" v-model="record.departDate" :disabled="readonly" />
-            <a-button v-else-if="column.key === 'act'" type="link" danger @click="form.legs.splice(index, 1)">删</a-button>
-          </template>
-        </a-table>
-      </div>
-      <div id="tour-apply-actions">
-        <a-form-item v-if="!readonly">
-          <a-space>
-            <a-button @click="save">保存草稿</a-button>
-            <a-button type="primary" @click="submit">提交审批</a-button>
-          </a-space>
-        </a-form-item>
-        <a-form-item v-else>
-          <a-button @click="pdf">导出 PDF</a-button>
-        </a-form-item>
       </div>
     </a-form>
   </div>
+  <div class="card" id="tour-apply-persons">
+    <div class="section-title">
+      <h3>出差人</h3>
+      <a-button v-if="!readonly" size="small" @click="addPerson">添加</a-button>
+    </div>
+    <a-table :data-source="form.persons" :columns="personCols" :pagination="false" size="middle" row-key="_row">
+      <template #bodyCell="{ column, record, index }">
+        <a-select v-if="column.key === 'personType'" v-model:value="record.personType" :disabled="readonly" :options="personTypeOpts" style="width: 100%" />
+        <a-input v-else-if="column.key === 'guestName'" v-model:value="record.guestName" :disabled="readonly || record.isApplicant === 1" />
+        <a-switch
+          v-else-if="column.key === 'isApplicant'"
+          :checked="record.isApplicant === 1"
+          :disabled="readonly"
+          @update:checked="(v: boolean) => (record.isApplicant = v ? 1 : 0)"
+        />
+        <a-button v-else-if="column.key === 'act'" type="link" danger @click="form.persons.splice(index, 1)">删除</a-button>
+      </template>
+    </a-table>
+  </div>
+  <div class="card" id="tour-apply-legs">
+    <div class="section-title">
+      <h3>行程</h3>
+      <a-button v-if="!readonly" size="small" @click="addLeg">添加</a-button>
+    </div>
+    <a-table :data-source="form.legs" :columns="legCols" :pagination="false" size="middle" row-key="_row">
+      <template #bodyCell="{ column, record, index }">
+        <a-input v-if="column.key === 'fromPlace'" v-model:value="record.fromPlace" :disabled="readonly" />
+        <a-input v-else-if="column.key === 'toPlace'" v-model:value="record.toPlace" :disabled="readonly" />
+        <a-select v-else-if="column.key === 'transportCode'" v-model:value="record.transportCode" :disabled="readonly" :options="transportOpts" style="width: 100%" />
+        <DateField v-else-if="column.key === 'departDate'" v-model="record.departDate" :disabled="readonly" />
+        <a-button v-else-if="column.key === 'act'" type="link" danger @click="form.legs.splice(index, 1)">删除</a-button>
+      </template>
+    </a-table>
+  </div>
   <div class="card" id="tour-apply-preview">
-    <h3>将到达的审批人</h3>
+    <div class="section-title"><h3>将到达的审批人</h3></div>
     <p class="muted" v-if="!preview.length">保存前也可预览，提交时系统按部门和角色指定，不能自选。</p>
     <a-descriptions :column="2" bordered size="small">
       <a-descriptions-item v-for="p in preview" :key="p.nodeCode" :label="p.nodeName">{{ p.realName }}</a-descriptions-item>
     </a-descriptions>
   </div>
   <div class="card" v-if="id" id="tour-apply-timeline">
-    <h3>进度</h3>
+    <div class="section-title"><h3>进度</h3></div>
     <Timeline :nodes="nodes" />
+  </div>
+  <div class="card sticky-actions" id="tour-apply-actions">
+    <a-space v-if="!readonly">
+      <a-button @click="save">保存草稿</a-button>
+      <a-button type="primary" @click="submit">提交审批</a-button>
+    </a-space>
+    <a-button v-else @click="pdf">导出 PDF</a-button>
   </div>
 </template>
 
@@ -86,6 +94,8 @@ import { message } from 'ant-design-vue'
 import http, { download } from '../../api'
 import Timeline from '../../components/Timeline.vue'
 import DateField from '../../components/DateField.vue'
+import PageHead from '../../components/PageHead.vue'
+import StatusTag from '../../components/StatusTag.vue'
 
 let seq = 1
 function rid() {

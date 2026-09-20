@@ -1,9 +1,15 @@
 <template>
-  <div class="card" style="position: relative">
-    <h2>{{ id ? '差旅报销' : '新建差旅报销' }}</h2>
-    <p class="muted">必须关联已通过的出差申请。行程与人员只读来自申请单，本期只填费用和票据。</p>
-    <a-button v-if="ocrEnabled && !readonly && id" id="tour-ocr" class="ocr-corner" :loading="ocrLoading" @click="runOcr">OCR 快速填写</a-button>
-    <a-alert v-if="detail?.lastReturn" :message="'最近退回：' + detail.lastReturn.comment" type="warning" show-icon style="margin-bottom: 12px" />
+  <PageHead
+    kicker="差旅报销"
+    :title="id ? '差旅报销' : '新建差旅报销'"
+    desc="必须关联已通过的出差申请。行程与人员只读来自申请单，本期只填费用和票据。"
+  >
+    <StatusTag v-if="detail?.form?.status" :code="detail.form.status" />
+    <span v-if="detail?.form?.claimNo" class="muted">{{ detail.form.claimNo }}</span>
+    <a-button v-if="ocrEnabled && !readonly && id" id="tour-ocr" :loading="ocrLoading" @click="runOcr">OCR 快速填写</a-button>
+  </PageHead>
+  <a-alert v-if="detail?.lastReturn" :message="'最近退回：' + detail.lastReturn.comment" type="warning" show-icon style="margin-bottom: 16px" />
+  <div class="card">
     <a-form :label-col="{ style: { width: '120px' } }">
       <div id="tour-claim-source">
         <a-form-item label="关联申请">
@@ -17,73 +23,76 @@
           />
         </a-form-item>
       </div>
-      <div v-if="source" class="card" style="background: #f8fbff">
-        <h3>申请单信息（只读）</h3>
-        <p>项目：{{ source.projectCode }} {{ source.projectName }}</p>
-        <p>原因：{{ source.apply?.reason }} · {{ source.apply?.startDate }} 至 {{ source.apply?.endDate }}</p>
-        <p>人员：{{ (source.persons || []).map((p: any) => p.guestName || '本人').join('、') }}</p>
-        <p>行程：{{ (source.legs || []).map((l: any) => l.fromPlace + '→' + l.toPlace).join('；') }}</p>
-        <h4>申请已走完的审批</h4>
-        <Timeline :nodes="applyTimeline" />
-      </div>
       <a-form-item label="收款银行"><a-input v-model:value="form.payeeBank" :disabled="readonly" /></a-form-item>
       <a-form-item label="收款账号"><a-input v-model:value="form.payeeAccount" :disabled="readonly" :placeholder="detail?.payeeAccountMasked || ''" /></a-form-item>
-      <div id="tour-claim-expense">
-        <h3>费用明细</h3>
-        <a-button v-if="!readonly" size="small" class="table-toolbar" @click="addExpense">添加</a-button>
-        <a-table :data-source="form.expenses" :columns="expenseCols" :pagination="false" size="small" row-key="_row" style="margin: 8px 0 16px">
-          <template #bodyCell="{ column, record, index }">
-            <a-select v-if="column.key === 'expenseTypeCode'" v-model:value="record.expenseTypeCode" :disabled="readonly" :options="expenseOpts" style="width: 100%" />
-            <DateField v-else-if="column.key === 'occurredOn'" v-model="record.occurredOn" :disabled="readonly" />
-            <a-input-number v-else-if="column.key === 'amount'" v-model:value="record.amount" :min="0.01" :precision="2" :disabled="readonly" style="width: 100%" />
-            <a-input v-else-if="column.key === 'remark'" v-model:value="record.remark" :disabled="readonly" />
-            <a-button v-else-if="column.key === 'act'" type="link" danger @click="form.expenses.splice(index, 1)">删</a-button>
-          </template>
-        </a-table>
-      </div>
-      <div id="tour-claim-invoice">
-        <h3>发票（手工填写）</h3>
-        <a-upload v-if="!readonly && id" :show-upload-list="false" :custom-request="uploadInvoice">
-          <a-button size="small">上传发票图片/PDF</a-button>
-        </a-upload>
-        <p v-else-if="!readonly" class="muted">请先保存草稿再上传发票。</p>
-        <p v-if="ocrHint" class="muted">{{ ocrHint }}</p>
-        <a-table :data-source="form.invoices" :columns="invoiceCols" :pagination="false" size="small" row-key="_row" style="margin: 8px 0 16px">
-          <template #bodyCell="{ column, record }">
-            <span v-if="column.key === 'fileId'">{{ record.fileId }}</span>
-            <a-input v-else-if="column.key === 'invoiceNo'" v-model:value="record.invoiceNo" :disabled="readonly" />
-            <a-input v-else-if="column.key === 'invoiceCode'" v-model:value="record.invoiceCode" :disabled="readonly" />
-            <a-input-number v-else-if="column.key === 'amount'" v-model:value="record.amount" :min="0.01" :precision="2" :disabled="readonly" style="width: 100%" />
-            <DateField v-else-if="column.key === 'issueDate'" v-model="record.issueDate" :disabled="readonly" />
-          </template>
-        </a-table>
-      </div>
-      <div id="tour-claim-pdf">
-        <a-form-item label="报销单 PDF">
-          <template v-if="id">
-            <a-space>
-              <a-upload v-if="!readonly || canFinance" :show-upload-list="false" accept=".pdf" :custom-request="importPdf">
-                <a-button>导入报销单 PDF（不解析费用）</a-button>
-              </a-upload>
-              <a-button @click="exportPdf">导出 PDF</a-button>
-            </a-space>
-          </template>
-          <span v-else class="muted">保存草稿后可导入原件（不解析费用）或导出 A4。</span>
-        </a-form-item>
-      </div>
-      <div id="tour-claim-actions">
-        <a-form-item v-if="!readonly">
-          <a-space>
-            <a-button @click="save">保存草稿</a-button>
-            <a-button type="primary" @click="submit">提交审批</a-button>
-          </a-space>
-        </a-form-item>
-      </div>
     </a-form>
   </div>
+  <div v-if="source" class="card ghost">
+    <div class="section-title"><h3>申请单信息（只读）</h3></div>
+    <div class="kv">
+      <div class="k">项目</div><div>{{ source.projectCode }} {{ source.projectName }}</div>
+      <div class="k">原因</div><div>{{ source.apply?.reason }} · {{ source.apply?.startDate }} 至 {{ source.apply?.endDate }}</div>
+      <div class="k">人员</div><div>{{ (source.persons || []).map((p: any) => p.guestName || '本人').join('、') }}</div>
+      <div class="k">行程</div><div>{{ (source.legs || []).map((l: any) => l.fromPlace + '→' + l.toPlace).join('；') }}</div>
+    </div>
+    <div class="section-title" style="margin-top: 16px"><h3>申请已走完的审批</h3></div>
+    <Timeline :nodes="applyTimeline" />
+  </div>
+  <div class="card" id="tour-claim-expense">
+    <div class="section-title">
+      <h3>费用明细</h3>
+      <a-button v-if="!readonly" size="small" @click="addExpense">添加</a-button>
+    </div>
+    <a-table :data-source="form.expenses" :columns="expenseCols" :pagination="false" size="middle" row-key="_row">
+      <template #bodyCell="{ column, record, index }">
+        <a-select v-if="column.key === 'expenseTypeCode'" v-model:value="record.expenseTypeCode" :disabled="readonly" :options="expenseOpts" style="width: 100%" />
+        <DateField v-else-if="column.key === 'occurredOn'" v-model="record.occurredOn" :disabled="readonly" />
+        <a-input-number v-else-if="column.key === 'amount'" v-model:value="record.amount" :min="0.01" :precision="2" :disabled="readonly" style="width: 100%" />
+        <a-input v-else-if="column.key === 'remark'" v-model:value="record.remark" :disabled="readonly" />
+        <a-button v-else-if="column.key === 'act'" type="link" danger @click="form.expenses.splice(index, 1)">删除</a-button>
+      </template>
+    </a-table>
+  </div>
+  <div class="card" id="tour-claim-invoice">
+    <div class="section-title">
+      <h3>发票（手工填写）</h3>
+      <a-upload v-if="!readonly && id" :show-upload-list="false" :custom-request="uploadInvoice">
+        <a-button size="small">上传发票图片/PDF</a-button>
+      </a-upload>
+    </div>
+    <p v-if="!readonly && !id" class="muted">请先保存草稿再上传发票。</p>
+    <a-alert v-if="ocrHint" :message="ocrHint" type="info" show-icon style="margin-bottom: 12px" />
+    <a-table :data-source="form.invoices" :columns="invoiceCols" :pagination="false" size="middle" row-key="_row">
+      <template #bodyCell="{ column, record }">
+        <span v-if="column.key === 'fileId'">{{ record.fileId }}</span>
+        <a-input v-else-if="column.key === 'invoiceNo'" v-model:value="record.invoiceNo" :disabled="readonly" />
+        <a-input v-else-if="column.key === 'invoiceCode'" v-model:value="record.invoiceCode" :disabled="readonly" />
+        <a-input-number v-else-if="column.key === 'amount'" v-model:value="record.amount" :min="0.01" :precision="2" :disabled="readonly" style="width: 100%" />
+        <DateField v-else-if="column.key === 'issueDate'" v-model="record.issueDate" :disabled="readonly" />
+      </template>
+    </a-table>
+  </div>
+  <div class="card" id="tour-claim-pdf">
+    <div class="section-title"><h3>报销单 PDF</h3></div>
+    <template v-if="id">
+      <a-space>
+        <a-upload v-if="!readonly || canFinance" :show-upload-list="false" accept=".pdf" :custom-request="importPdf">
+          <a-button>导入报销单 PDF（不解析费用）</a-button>
+        </a-upload>
+        <a-button @click="exportPdf">导出 PDF</a-button>
+      </a-space>
+    </template>
+    <span v-else class="muted">保存草稿后可导入原件（不解析费用）或导出 A4。</span>
+  </div>
   <div class="card" v-if="id" id="tour-claim-timeline">
-    <h3>报销进度</h3>
+    <div class="section-title"><h3>报销进度</h3></div>
     <Timeline :nodes="nodes" />
+  </div>
+  <div class="card sticky-actions" id="tour-claim-actions">
+    <a-space v-if="!readonly">
+      <a-button @click="save">保存草稿</a-button>
+      <a-button type="primary" @click="submit">提交审批</a-button>
+    </a-space>
   </div>
 </template>
 
@@ -94,6 +103,8 @@ import { message } from 'ant-design-vue'
 import http, { download, uploadFile } from '../../api'
 import Timeline from '../../components/Timeline.vue'
 import DateField from '../../components/DateField.vue'
+import PageHead from '../../components/PageHead.vue'
+import StatusTag from '../../components/StatusTag.vue'
 import { useAuth } from '../../stores'
 
 let seq = 1
@@ -270,10 +281,3 @@ async function runOcr() {
   }
 }
 </script>
-<style scoped>
-.ocr-corner {
-  position: absolute;
-  right: 24px;
-  top: 18px;
-}
-</style>
