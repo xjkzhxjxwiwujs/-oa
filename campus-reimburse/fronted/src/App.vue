@@ -59,8 +59,29 @@
       <a-layout>
         <a-layout-header class="app-header">
           <div class="crumb">智汇签 / <b>{{ pageTitle }}</b></div>
-          <span class="muted">{{ user?.realName }}</span>
+          <div class="top-actions">
+            <button class="icon-btn" type="button" title="新手引导" @click="replayGuide">引导</button>
+            <button class="icon-btn" type="button" title="通知" @click="toggleNotice">
+              通知
+              <em v-if="notifies.length">{{ notifies.length }}</em>
+            </button>
+          </div>
         </a-layout-header>
+        <aside v-if="noticeOpen" class="notice-panel">
+          <div class="notice-panel-head">
+            <b>消息通知</b>
+            <button type="button" @click="noticeOpen = false">关闭</button>
+          </div>
+          <p v-if="!notifies.length" class="muted">暂无通知</p>
+          <div v-for="n in notifies" :key="n.id" class="notify-item">
+            <span class="notify-dot"></span>
+            <div>
+              <div class="title">{{ n.title }}</div>
+              <div class="muted">{{ n.content }}</div>
+              <div class="time">{{ n.createdAt }}</div>
+            </div>
+          </div>
+        </aside>
         <a-layout-content class="main">
           <router-view />
         </a-layout-content>
@@ -71,7 +92,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import zhCN from 'ant-design-vue/es/locale/zh_CN'
@@ -88,6 +109,7 @@ import {
 } from '@ant-design/icons-vue'
 import { pageKey } from './guide'
 import { rolesText } from './labels'
+import http from './api'
 import { useAuth, useGuide } from './stores'
 import AppTour from './components/AppTour.vue'
 
@@ -97,10 +119,10 @@ const locale = {
 }
 const theme = {
   token: {
-    colorPrimary: '#2E5BFF',
-    colorLink: '#2E5BFF',
-    borderRadius: 10,
-    colorBgLayout: '#f4f7fc',
+    colorPrimary: '#1E5C4F',
+    colorLink: '#1E5C4F',
+    borderRadius: 8,
+    colorBgLayout: '#F5F3EC',
     fontFamily: 'PingFang SC, Microsoft YaHei, Segoe UI, sans-serif'
   }
 }
@@ -122,6 +144,8 @@ const router = useRouter()
 const auth = useAuth()
 const guide = useGuide()
 const user = computed(() => auth.user)
+const noticeOpen = ref(false)
+const notifies = ref<any[]>([])
 const isLogin = computed(() => route.path === '/login')
 const showApply = computed(() => user.value?.roles?.includes('APPLICANT'))
 const showApprove = computed(() =>
@@ -143,8 +167,24 @@ const pageTitle = computed(() => {
   return (hit && titles[hit]) || '工作台'
 })
 
+watch(
+  () => user.value?.id,
+  async (id) => {
+    if (!id) {
+      notifies.value = []
+      return
+    }
+    notifies.value = (await http.get('/api/common/notifies')).data.data || []
+  },
+  { immediate: true }
+)
+
 function go(path: string) {
   router.push(path)
+}
+
+function toggleNotice() {
+  noticeOpen.value = !noticeOpen.value
 }
 
 function replayGuide() {

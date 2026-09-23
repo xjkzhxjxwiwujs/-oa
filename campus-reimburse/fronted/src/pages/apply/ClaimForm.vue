@@ -67,8 +67,10 @@
         <span v-if="column.key === 'fileId'">{{ record.fileId }}</span>
         <a-input v-else-if="column.key === 'invoiceNo'" v-model:value="record.invoiceNo" :disabled="readonly" />
         <a-input v-else-if="column.key === 'invoiceCode'" v-model:value="record.invoiceCode" :disabled="readonly" />
+        <a-input v-else-if="column.key === 'buyerName'" v-model:value="record.buyerName" :disabled="readonly" />
         <a-input-number v-else-if="column.key === 'amount'" v-model:value="record.amount" :min="0.01" :precision="2" :disabled="readonly" style="width: 100%" />
         <DateField v-else-if="column.key === 'issueDate'" v-model="record.issueDate" :disabled="readonly" />
+        <a-tag v-else-if="column.key === 'ocrStatus'" :color="ocrColor(record.ocrStatus)">{{ ocrText(record.ocrStatus) }}</a-tag>
       </template>
     </a-table>
   </div>
@@ -150,12 +152,21 @@ const expenseCols = computed(() => {
   return cols
 })
 const invoiceCols = [
-  { title: '文件ID', key: 'fileId', width: 90 },
+  { title: '文件ID', key: 'fileId', width: 80 },
   { title: '票号', key: 'invoiceNo' },
   { title: '代码', key: 'invoiceCode' },
-  { title: '金额', key: 'amount', width: 140 },
-  { title: '开票日', key: 'issueDate', width: 180 }
+  { title: '购方', key: 'buyerName' },
+  { title: '金额', key: 'amount', width: 120 },
+  { title: '开票日', key: 'issueDate', width: 160 },
+  { title: 'OCR', key: 'ocrStatus', width: 100 }
 ]
+
+function ocrText(status?: string) {
+  return ({ PENDING: '识别中', SUCCESS: '待核对', FAILED: '识别失败' } as Record<string, string>)[status || ''] || '未识别'
+}
+function ocrColor(status?: string) {
+  return ({ PENDING: 'processing', SUCCESS: 'success', FAILED: 'error' } as Record<string, string>)[status || ''] || 'default'
+}
 
 function addExpense() {
   form.expenses.push({ _row: rid(), expenseTypeCode: 'TRAFFIC', occurredOn: '', amount: 0.01, remark: '' })
@@ -227,8 +238,10 @@ async function uploadInvoice(opt: any) {
       invoiceType: 'VAT',
       invoiceCode: '',
       invoiceNo: '',
+      buyerName: '',
       amount: 0.01,
-      issueDate: ''
+      issueDate: '',
+      ocrStatus: ''
     })
     message.success('已上传，请补全票号')
     opt.onSuccess?.({}, opt.file)
@@ -258,23 +271,34 @@ async function runOcr() {
     return
   }
   ocrLoading.value = true
+  invoice.ocrStatus = 'PENDING'
+  ocrHint.value = '已进入识别队列，请稍候。当前环境为 mock，通常会明确失败，请改回手工填写。'
   try {
     await http.post(`/api/applicant/files/${invoice.fileId}/ocr`)
-    ocrHint.value = '已进入 OCR 队列，识别完成后再次点击可读取结果。'
-    window.setTimeout(async () => {
+    for (let i = 0; i < 6; i++) {
+      await new Promise((r) => setTimeout(r, 1500))
       const { data } = await http.get(`/api/applicant/files/${invoice.fileId}/ocr`)
       const result = data.data
-      if (result?.status === 'SUCCESS') {
+      if (!result) continue
+      invoice.ocrStatus = result.status
+      if (result.status === 'SUCCESS') {
         invoice.invoiceCode = result.invoiceCode || invoice.invoiceCode
         invoice.invoiceNo = result.invoiceNo || invoice.invoiceNo
         invoice.issueDate = result.issueDate || invoice.issueDate
         invoice.amount = result.amount || invoice.amount
-        ocrHint.value = '识别结果已回填，请核对后保存。'
-      } else if (result?.message) {
-        ocrHint.value = `OCR 未识别成功：${result.message}，请手工填写。`
+        invoice.buyerName = result.buyerName || invoice.buyerName
+        ocrHint.value = '识别结果已回填，请核对后再保存。财务仍须人工确认。'
+        return
       }
-    }, 1500)
+      if (result.status === 'FAILED' || result.message) {
+        invoice.ocrStatus = result.status || 'FAILED'
+        ocrHint.value = `OCR 未识别成功：${result.message || '请手工填写'}。`
+        return
+      }
+    }
+    ocrHint.value = '仍在识别队列中，可稍后再次点击查看结果。'
   } catch (e: any) {
+    invoice.ocrStatus = 'FAILED'
     message.error(e.response?.data?.message || 'OCR 请求失败')
   } finally {
     ocrLoading.value = false

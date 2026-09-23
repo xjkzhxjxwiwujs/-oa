@@ -10,13 +10,16 @@
     </div>
   </div>
   <div class="card" id="tour-finance-list">
-    <div class="section-title"><h3>报销单</h3></div>
+    <div class="section-title">
+      <h3>报销单</h3>
+      <a-select v-model:value="statusFilter" allow-clear placeholder="按状态筛选" style="width: 160px" :options="statusOpts" />
+    </div>
     <a-empty v-if="!rows.length" description="暂无报销单">
       <a-button type="primary" @click="seed">添加 1～2 条调试数据</a-button>
     </a-empty>
     <a-table
       v-else
-      :data-source="rows"
+      :data-source="shown"
       :columns="cols"
       :pagination="false"
       size="middle"
@@ -33,13 +36,13 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import http, { download } from '../../api'
 import PageHead from '../../components/PageHead.vue'
 import StatusTag from '../../components/StatusTag.vue'
-import { money, nodeLabel } from '../../labels'
+import { STATUS_LABEL, money, nodeLabel } from '../../labels'
 
 const cols = [
   { title: '单号', dataIndex: 'claimNo', width: 180 },
@@ -50,6 +53,9 @@ const cols = [
   { title: '创建时间', dataIndex: 'createdAt' }
 ]
 const rows = ref<any[]>([])
+const statusFilter = ref<string>()
+const statusOpts = Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label }))
+const shown = computed(() => rows.value.filter((r) => !statusFilter.value || r.status === statusFilter.value))
 const router = useRouter()
 async function load() {
   rows.value = (await http.get('/api/finance/claims')).data.data || []

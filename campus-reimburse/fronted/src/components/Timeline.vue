@@ -1,16 +1,21 @@
 <template>
-  <div class="timeline">
+  <div class="tl">
     <div
       v-for="n in nodes"
       :key="n.nodeCode"
-      class="node"
+      class="tl-node"
       :class="{ current: n.state === 'current', done: n.state === 'done', timeout: n.timeout, rejected: n.state === 'rejected' }"
     >
-      <div style="font-weight: 650">{{ n.nodeName }}</div>
-      <div class="muted">{{ n.assigneeName || statusText(n.state) }}</div>
-      <div class="muted" v-if="n.stayHours != null">已停留 {{ n.stayHours }} 小时</div>
-      <div class="muted" v-if="n.timeout" style="color: var(--warn)">已超时</div>
-      <div class="muted" v-if="n.comment">{{ n.comment }}</div>
+      <div class="tl-dot"></div>
+      <div>
+        <b>{{ n.nodeName }}</b>
+        <div class="muted">
+          {{ n.assigneeName || statusText(n.state) }}
+          <template v-if="n.stayHours != null"> · 已停留 {{ n.stayHours }} 小时</template>
+          <template v-if="n.timeout"> · 已超时</template>
+        </div>
+        <div class="muted" v-if="n.comment">{{ n.comment }}</div>
+      </div>
     </div>
   </div>
 </template>
